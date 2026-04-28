@@ -133,13 +133,24 @@ export async function getSeriesDetails(mangaId: string, requestManager: RequestM
 		authors.push(writer.name);
 	}
 
+	// Heuristic: mark series as hentai if any genre/tag suggests adult content.
+	// Kavita doesn't expose a single "is NSFW" flag, but mature/hentai/adult/erotica
+	// tags are conventional. This makes Paperback's NSFW filter behave correctly
+	// per-series instead of treating every Kavya entry the same.
+	const adultTagMatchers = /\b(hentai|adult|erotica|mature|smut|18\+|nsfw|ecchi)\b/i;
+	const hasAdultTag = (
+		[...(metadataResult.genres ?? []), ...(metadataResult.tags ?? [])]
+			.some((t: any) => adultTagMatchers.test(t.title ?? ''))
+		|| (metadataResult.ageRating ?? 0) >= 16  // Kavita ageRating: 16=Mature, 17=Adults Only, 18=X18Plus
+	);
+
 	return {
 		image: `${kavitaAPI.url}/image/series-cover?seriesId=${mangaId}&apiKey=${kavitaAPI.key}`,
 		artist: artists.join(', '),
 		author: authors.join(', '),
 		desc: metadataResult.summary.replace(/<[^>]+>/g, ''),
 		status: KAVITA_PUBLICATION_STATUS[metadataResult.publicationStatus] ?? 'Unknown',
-		hentai: false,
+		hentai: hasAdultTag,
 		titles: [seriesResult.name],
 		rating: seriesResult.userRating,
 		tags: tagSections,
